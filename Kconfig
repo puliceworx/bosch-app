@@ -1,0 +1,12 @@
+
+
+source "Kconfig.zephyr"
+
+module = APPMAIN
+module-str = APPMAIN
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
+
+module = APPSENS
+module-str = APPSENS
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
+

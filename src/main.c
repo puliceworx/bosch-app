@@ -15,7 +15,6 @@
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/usbd.h>
 
-#include <zephyr/sys/printk.h>
 #include <zephyr/logging/log.h>
 
 #include <inttypes.h>
@@ -27,7 +26,7 @@
 // library includes -----------------------------------------------------------
 
 // Macros and Defines ---------------------------------------------------------
-LOG_MODULE_REGISTER(cdc_acm_echo, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(APPMAIN, CONFIG_APPMAIN_LOG_LEVEL);
 
 /* 1000 msec = 1 sec */
 #define SLEEP_TIME_MS   1000
@@ -95,13 +94,13 @@ const struct device *dev_usb = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 void button0_pressed(const struct device *dev, struct gpio_callback *cb,
 		    uint32_t pins)
 {
-  printk("Button 0 pressed at %" PRIu32 "\n", k_cycle_get_32());
+  LOG_DBG("Button 0 pressed at %" PRIu32 "", k_cycle_get_32());
 }
 
 void button1_pressed(const struct device *dev, struct gpio_callback *cb,
 		    uint32_t pins)
 {
-  printk("Button 1 pressed at %" PRIu32 "\n", k_cycle_get_32());
+  LOG_DBG("Button 1 pressed at %" PRIu32 "", k_cycle_get_32());
 }
 
 int main(void)
@@ -109,23 +108,23 @@ int main(void)
 	int ret;
   uint8_t active_led = 0;
 
-  printk("Let's go!\n");
-
-  if (!configure_usb())
-  {
-    printk("usb not ready\n");
-    return 0;
-  }
+  LOG_DBG("Let's go!");
 
   if (!configure_leds())
   {
-    printk("leds not ready\n");
+    LOG_ERR("leds not ready");
     return 0;
   }
 
   if (!configure_btns())
   {
-    printk("buttons not ready\n");
+    LOG_ERR("buttons not ready");
+    return 0;
+  }
+
+  if (!configure_usb())
+  {
+    LOG_ERR("usb not ready");
     return 0;
   }
 
@@ -144,7 +143,7 @@ int main(void)
 
       if (ret < 0) 
       {
-        printk("led set fail\n");
+        LOG_ERR("led set fail");
         return 0;
       }
     }
@@ -158,7 +157,6 @@ int main(void)
 		k_msleep(SLEEP_TIME_MS);
 	}
 
-  printk("main out \n");
   return 0;
 }
 
@@ -168,7 +166,7 @@ static int configure_leds(void)
 
   if (!gpio_is_ready_dt(&leds[0]))
   {
-    printk("gpio not ready\n");
+    LOG_ERR("gpio not ready");
     return 0;
   }
 
@@ -177,10 +175,13 @@ static int configure_leds(void)
     ret = gpio_pin_configure_dt(&leds[x], GPIO_OUTPUT_INACTIVE);
     if (ret < 0) 
     {
-      printk("gpio red configure fail\n");
+      LOG_ERR("gpio red configure fail");
       return 0;
     }
   }
+
+  // Turn on the red led solid until usb port is opened
+  gpio_pin_configure_dt(&leds[RED_LED], GPIO_OUTPUT_ACTIVE);
 
   return 1;
 }
@@ -191,14 +192,14 @@ static int configure_btns(void)
 
   if (!gpio_is_ready_dt(&button0)) 
   {
-		printk("Error: button device %s is not ready\n",
+		LOG_ERR("Error: button device %s is not ready",
 		       button0.port->name);
 		return 0;
 	}
 
   if (!gpio_is_ready_dt(&button1)) 
   {
-    printk("Error: button device %s is not ready\n",
+    LOG_ERR("Error: button device %s is not ready",
            button1.port->name);
     return 0;
   }
@@ -206,7 +207,7 @@ static int configure_btns(void)
 	ret = gpio_pin_configure_dt(&button0, GPIO_INPUT);
 	if (ret != 0) 
   {
-		printk("Error %d: failed to configure %s pin %d\n",
+		LOG_ERR("Error %d: failed to configure %s pin %d",
 		       ret, button0.port->name, button0.pin);
 		return 0;
 	}
@@ -214,7 +215,7 @@ static int configure_btns(void)
   ret = gpio_pin_configure_dt(&button1, GPIO_INPUT);
   if (ret != 0) 
   {
-    printk("Error %d: failed to configure %s pin %d\n",
+    LOG_ERR("Error %d: failed to configure %s pin %d",
            ret, button1.port->name, button1.pin);
     return 0;
   }
@@ -222,7 +223,7 @@ static int configure_btns(void)
   ret = gpio_pin_interrupt_configure_dt(&button0,
 					      GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret != 0) {
-		printk("Error %d: failed to configure interrupt on %s pin %d\n",
+		LOG_ERR("Error %d: failed to configure interrupt on %s pin %d",
 			ret, button0.port->name, button0.pin);
 		return 0;
 	}
@@ -230,7 +231,7 @@ static int configure_btns(void)
   ret = gpio_pin_interrupt_configure_dt(&button1,
                 GPIO_INT_EDGE_TO_ACTIVE);
   if (ret != 0) {
-    printk("Error %d: failed to configure interrupt on %s pin %d\n",
+    LOG_ERR("Error %d: failed to configure interrupt on %s pin %d",
       ret, button1.port->name, button1.pin);
     return 0;
   }
@@ -241,8 +242,8 @@ static int configure_btns(void)
   gpio_init_callback(&button1_cb_data, button1_pressed, BIT(button1.pin));
   gpio_add_callback(button1.port, &button1_cb_data);
 
-  printk("Set up button0 at %s pin %d\n", button0.port->name, button0.pin);
-  printk("Set up button1 at %s pin %d\n", button1.port->name, button1.pin);
+  LOG_ERR("Set up button0 at %s pin %d", button0.port->name, button0.pin);
+  LOG_ERR("Set up button1 at %s pin %d", button1.port->name, button1.pin);
 
   return 1;
 }
