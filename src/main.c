@@ -9,6 +9,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/sensor.h>
 
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/ring_buffer.h>
@@ -90,6 +91,7 @@ static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(SW1_NODE, gpios,
 							      {0});
 
 const struct device *dev_usb = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+const struct device *const dev_temp = DEVICE_DT_GET_ANY(ti_tmp112);
 
 void button0_pressed(const struct device *dev, struct gpio_callback *cb,
 		    uint32_t pins)
@@ -107,6 +109,8 @@ int main(void)
 {
 	int ret;
   uint8_t active_led = 0;
+ 	struct sensor_value attr;
+  struct sensor_value temp_value;
 
   LOG_DBG("Let's go!");
 
@@ -122,6 +126,36 @@ int main(void)
     return 0;
   }
 
+  if (IS_ENABLED(CONFIG_TMP112))
+  {
+    if (!device_is_ready(dev_temp))
+    {
+      LOG_ERR("Error: Device %s is not ready", dev_temp->name);
+      return 0;
+    }
+
+
+    attr.val1 = 150;
+    attr.val2 = 0;
+    ret = sensor_attr_set(dev_temp, SENSOR_CHAN_AMBIENT_TEMP,
+                          SENSOR_ATTR_FULL_SCALE, &attr);
+    if (ret) 
+    {
+      LOG_ERR("sensor_attr_set failed ret %d", ret);
+      return 0;
+    }
+
+    attr.val1 = 8;
+    attr.val2 = 0;
+    ret = sensor_attr_set(dev_temp, SENSOR_CHAN_AMBIENT_TEMP,
+                          SENSOR_ATTR_SAMPLING_FREQUENCY, &attr);
+    if (ret) 
+    {
+      LOG_ERR("sensor_attr_set failed ret %d\n", ret);
+      return 0;
+    }
+  }
+
   if (!configure_usb())
   {
     LOG_ERR("usb not ready");
@@ -130,6 +164,26 @@ int main(void)
 
   while (1) 
   {
+    if (IS_ENABLED(CONFIG_TMP112))
+    {
+  		ret = sensor_sample_fetch(dev_temp);
+  		if (ret) 
+      {
+  			LOG_ERR("sensor_sample_fetch failed ret %d", ret);
+  			continue;
+  		}
+
+  		ret = sensor_channel_get(dev_temp, SENSOR_CHAN_AMBIENT_TEMP, &temp_value);
+  		if (ret) 
+      {
+  			LOG_ERR("sensor_channel_get failed ret %d", ret);
+  			continue;
+  		}
+
+  		LOG_INF("temp is %d (%d micro)", temp_value.val1, temp_value.val2);
+    }
+
+
     for (uint8_t x = 0; x < 3; x++)
     {
       if (x == active_led)
